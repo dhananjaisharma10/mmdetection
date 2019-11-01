@@ -5,9 +5,9 @@ import torch.nn.functional as F
 from mmcv.cnn import xavier_init
 
 from mmdet.core import AnchorGenerator, anchor_target, multi_apply
-from .anchor_head import AnchorHead
 from ..losses import smooth_l1_loss
 from ..registry import HEADS
+from .anchor_head import AnchorHead
 
 
 # TODO: add loss evaluator for SSD
@@ -143,8 +143,10 @@ class SSDHead(AnchorHead):
         featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
         assert len(featmap_sizes) == len(self.anchor_generators)
 
+        device = cls_scores[0].device
+
         anchor_list, valid_flag_list = self.get_anchors(
-            featmap_sizes, img_metas)
+            featmap_sizes, img_metas, device=device)
         cls_reg_targets = anchor_target(
             anchor_list,
             valid_flag_list,
