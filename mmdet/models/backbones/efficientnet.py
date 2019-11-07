@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from functools import partial
 from collections import namedtuple
+from ..registry import BACKBONES
 
 
 field_names = ['kernel_size', 'num_repeat', 'inplanes', 'outplanes',
@@ -195,6 +196,7 @@ class MBConvBlock(nn.Module):
         return out
 
 
+@BACKBONES.register_module
 class EfficientNet(nn.Module):
     """The class implements EfficientNet.
     """
@@ -333,30 +335,19 @@ class EfficientNet(nn.Module):
         x = self._conv_stem(x)
         x = self._bn0(x)
         x = self._swish(x)
-        print('Stem:', x.shape)
 
         for block in self._blocks:
             x = block(x,
                       drop_connect_rate=self.drop_connect_rate)
-            print('Block:', x.shape)
 
         x = self._conv_head(x)
         x = self._bn1(x)
         x = self._swish(x)
-        print('Head:', x.shape)
 
         x = F.adaptive_avg_pool2d(x, 1)
         x = x.view(x.size(0), -1)
         if self.dropout_rate > 0:
             x = self._dropout(x)
         x = self._fc(x)
-        print('Final:', x.shape)
 
         return x
-
-
-if __name__ == '__main__':
-    net = EfficientNet('efficientnet-b0', 1000, [224, 224])
-    print(net)
-    a = torch.randn(1, 3, 224, 224)
-    out = net(a)
