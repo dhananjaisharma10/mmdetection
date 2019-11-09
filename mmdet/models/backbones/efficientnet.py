@@ -204,7 +204,7 @@ class EfficientNet(nn.Module):
     """
 
     arch_types = {
-        # (width_coefficient, depth_coefficient, resolution, dropout_rate)
+        # width_coefficient, depth_coefficient, resolution, dropout_rate
         'efficientnet-b0': (1.0, 1.0, 224, 0.2),
         'efficientnet-b1': (1.0, 1.1, 240, 0.2),
         'efficientnet-b2': (1.1, 1.2, 260, 0.3),
@@ -364,8 +364,7 @@ class EfficientNet(nn.Module):
         x = self._swish(x)
         outs = []
         for i, block in enumerate(self._blocks):
-            x = block(x,
-                      drop_connect_rate=self.drop_connect_rate)
+            x = block(x, self.drop_connect_rate)
             if i in self.out_indices:
                 outs.append(x)
 
