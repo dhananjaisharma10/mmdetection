@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from functools import partial
+from mmcv.runner import load_checkpoint
+from mmcv.cnn import constant_init, kaiming_init
 from collections import namedtuple
 from ..registry import BACKBONES
 
@@ -232,13 +234,17 @@ class EfficientNet(nn.Module):
     min_depth = None
     use_se = True
 
+    # TODO: Specify out_indices correctly.
     def __init__(self,
                  cls_name,
                  num_classes,
+                 num_stages,
                  image_size,
+                 out_indices=(0, 1, 2, 3),
                  style='pytorch'):
         super(EfficientNet, self).__init__()
         assert cls_name in self.arch_types, 'Wrong efficientnet configuration'
+        assert len(self.arch_settings.keys()) == num_stages
         self.cls = self.arch_types[cls_name]
         self.width = self.cls[0]
         self.depth = self.cls[1]
@@ -297,11 +303,32 @@ class EfficientNet(nn.Module):
         )
 
         self._bn1 = nn.BatchNorm2d(1280, self.bn_eps, bn_momentum)
-
+        # TODO: Remove the following comment
+        self._global_pool = nn.AdaptiveAvgPool2d(1)
         self._fc = nn.Linear(1280, self.num_classes)
         if self.dropout_rate > 0:
             self._dropout = nn.Dropout2d(self.dropout_rate)
         self._swish = Swish()
+
+    def init_weights(self, pretrained=None):
+        if isinstance(pretrained, str):
+            logger = logging.getLogger()
+            load_checkpoint(self, pretrained, strict=False, logger=logger)
+        elif pretrained is None:
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    kaiming_init(m)
+                # elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                #     constant_init(m, 1)
+
+            if self.zero_init_residual:
+                for m in self.modules():
+                    if isinstance(m, MBConvBlock):
+                        constant_init(m.norm3, 0)
+                    elif isinstance(m, MBConvBlock):
+                        constant_init(m.norm2, 0)
+        else:
+            raise TypeError('pretrained must be a str or None')
 
     def round_filters(self, filters):
         """Round number of filters based on depth multiplier.
@@ -335,10 +362,12 @@ class EfficientNet(nn.Module):
         x = self._conv_stem(x)
         x = self._bn0(x)
         x = self._swish(x)
-
-        for block in self._blocks:
+        outs = []
+        for i, block in enumerate(self._blocks):
             x = block(x,
                       drop_connect_rate=self.drop_connect_rate)
+            if i in self.out_indices:
+                outs.append(x)
 
         x = self._conv_head(x)
         x = self._bn1(x)
@@ -350,4 +379,4 @@ class EfficientNet(nn.Module):
             x = self._dropout(x)
         x = self._fc(x)
 
-        return x
+        return tuple(outs)
