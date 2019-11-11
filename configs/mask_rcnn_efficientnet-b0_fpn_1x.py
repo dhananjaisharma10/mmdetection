@@ -152,7 +152,8 @@ data = dict(
     workers_per_gpu=2,
     train=dict(
         type='RepeatDataset',
-        times=8,
+        # times=8,
+        times=1,
         dataset=dict(
             type=dataset_type,
             ann_file=data_root +
@@ -172,8 +173,9 @@ data = dict(
         img_prefix=data_root + 'images/',
         pipeline=test_pipeline))
 # optimizer
-# lr is set for a batch size of 8
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+# NOTE: lr was set for a batch size of 8; it was 0.01
+# lr is set for a batch size of 1
+optimizer = dict(type='SGD', lr=0.00125, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -192,7 +194,8 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 8  # actual epoch = 8 * 8 = 64
+# total_epochs = 8  # actual epoch = 8 * 8 = 64
+total_epochs = 64  # actual epoch = 8 * 8 = 64
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = './work_dirs/cityscapes/mask_rcnn_e-b0_cityscapes'
