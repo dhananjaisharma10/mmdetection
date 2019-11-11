@@ -30,6 +30,42 @@ def drop_connect(inputs, p):
     return output
 
 
+class Conv2dDynamicSamePadding(nn.Conv2d):
+    """ 2D Convolutions like TensorFlow, for a dynamic image size """
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 dilation=1,
+                 groups=1,
+                 bias=True):
+        super().__init__(in_channels, out_channels, kernel_size,
+                         stride, 0, dilation, groups, bias)
+        if len(self.stride) == 2:
+            self.stride = self.stride
+        else:
+            self.stride = [self.stride[0]] * 2
+
+    def forward(self, x):
+        ih, iw = x.size()[-2:]
+        kh, kw = self.weight.size()[-2:]
+        sh, sw = self.stride
+        oh, ow = math.ceil(ih / sh), math.ceil(iw / sw)
+        pad_h = max((oh - 1) * self.stride[0]
+                    + (kh - 1) * self.dilation[0]
+                    + 1 - ih, 0)
+        pad_w = max((ow - 1) * self.stride[1]
+                    + (kw - 1) * self.dilation[1]
+                    + 1 - iw, 0)
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, [pad_w // 2, pad_w - pad_w // 2,
+                          pad_h // 2, pad_h - pad_h // 2])
+        return F.conv2d(x, self.weight, self.bias, self.stride, self.padding,
+                        self.dilation, self.groups)
+
+
 class Conv2dStaticSamePadding(nn.Conv2d):
     """ 2D Convolutions like TensorFlow, for a fixed image size"""
 
@@ -71,12 +107,15 @@ class Conv2dStaticSamePadding(nn.Conv2d):
         return x
 
 
-def get_same_padding_conv2d(image_size):
-    """ Chooses static padding if you have specified an image size.
-        Static padding is necessary for ONNX exporting of models.
-    """
+def get_same_padding_conv2d(image_size=None):
+    """ Chooses static padding if you have specified an image size,
+        and dynamic padding otherwise.
+        Static padding is necessary for ONNX exporting of models. """
 
-    return partial(Conv2dStaticSamePadding, image_size=image_size)
+    if image_size is None:
+        return Conv2dDynamicSamePadding
+    else:
+        return partial(Conv2dStaticSamePadding, image_size=image_size)
 
 
 class Swish(nn.Module):
@@ -234,14 +273,14 @@ class EfficientNet(nn.Module):
     min_depth = None
     use_se = True
 
-    # TODO: Specify out_indices correctly.
     def __init__(self,
                  cls_name,
                  num_classes,
                  num_stages,
                  image_size,
-                 out_indices=(0, 1, 2, 3),
-                 style='pytorch'):
+                 out_indices,
+                 style='pytorch',
+                 zero_init_residual=True):
         super(EfficientNet, self).__init__()
         assert cls_name in self.arch_types, 'Wrong efficientnet configuration'
         assert len(self.arch_settings.keys()) == num_stages
@@ -252,7 +291,9 @@ class EfficientNet(nn.Module):
         self.dropout_rate = self.cls[3]
         self.num_classes = num_classes
         self.image_size = image_size
+        self.out_indices = out_indices
         self.style = style
+        self.zero_init_residual = zero_init_residual
 
         bn_momentum = 1 - self.bn_momentum
 
@@ -268,7 +309,10 @@ class EfficientNet(nn.Module):
 
         self._bn0 = nn.BatchNorm2d(outplanes, self.bn_eps, bn_momentum)
 
-        self._blocks = nn.ModuleList([])
+        # Store the block indices for the end of each stage
+        self._stage_indices = []
+        self._blocks = nn.ModuleList()
+        block_num = 0
         for stage in self.arch_settings.values():
             assert stage.num_repeat > 0
             num_repeat = self.round_repeats(stage.num_repeat)
@@ -295,19 +339,13 @@ class EfficientNet(nn.Module):
                     )
                 )
 
-        self._conv_head = Conv2d(
-            outplanes,
-            1280,
-            1,
-            bias=False
-        )
+                if i == num_repeat - 1:
+                    self._stage_indices.append(block_num)
 
-        self._bn1 = nn.BatchNorm2d(1280, self.bn_eps, bn_momentum)
-        # TODO: Remove the following comment
-        self._global_pool = nn.AdaptiveAvgPool2d(1)
-        self._fc = nn.Linear(1280, self.num_classes)
-        if self.dropout_rate > 0:
-            self._dropout = nn.Dropout2d(self.dropout_rate)
+                block_num += 1
+
+        self._stage_indices = [self._stage_indices[x]
+                               for x in self.out_indices]
         self._swish = Swish()
 
     def init_weights(self, pretrained=None):
@@ -365,17 +403,7 @@ class EfficientNet(nn.Module):
         outs = []
         for i, block in enumerate(self._blocks):
             x = block(x, self.drop_connect_rate)
-            if i in self.out_indices:
+            if i in self._stage_indices:
                 outs.append(x)
-
-        x = self._conv_head(x)
-        x = self._bn1(x)
-        x = self._swish(x)
-
-        x = F.adaptive_avg_pool2d(x, 1)
-        x = x.view(x.size(0), -1)
-        if self.dropout_rate > 0:
-            x = self._dropout(x)
-        x = self._fc(x)
 
         return tuple(outs)
