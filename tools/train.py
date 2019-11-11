@@ -10,6 +10,7 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
                         train_detector)
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
+from mmdet.utils import flops_counter
 
 
 def parse_args():
@@ -82,6 +83,8 @@ def main():
 
     model = build_detector(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    print('Number of trainable params:',
+          flops_counter.get_model_parameters_number(model))
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
