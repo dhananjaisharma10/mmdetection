@@ -348,6 +348,8 @@ class EfficientNet(nn.Module):
                                for x in self.out_indices]
         self._swish = Swish()
 
+    # TODO: Implement the function for freezing stages
+
     def init_weights(self, pretrained=None):
         if isinstance(pretrained, str):
             logger = logging.getLogger()
@@ -407,3 +409,5 @@ class EfficientNet(nn.Module):
                 outs.append(x)
 
         return tuple(outs)
+
+# TODO: add the function for training as given in resnet.py
