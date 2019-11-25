@@ -9,6 +9,7 @@ from mmcv.runner import load_checkpoint
 from mmcv.cnn import constant_init, kaiming_init
 from collections import namedtuple
 from ..registry import BACKBONES
+from torch.nn.modules.batchnorm import _BatchNorm
 
 
 field_names = ['kernel_size', 'num_repeat', 'inplanes', 'outplanes',
@@ -149,6 +150,7 @@ class MBConvBlock(nn.Module):
         self.expansion = expansion
         self.stride = stride
         self.momentum = 1 - momentum
+        # self.momentum = momentum
         self.eps = eps
         self.se_ratio = se_ratio
         self.id_skip = stride == 1 and self.inplanes == self.outplanes
@@ -279,8 +281,10 @@ class EfficientNet(nn.Module):
                  num_stages,
                  image_size,
                  out_indices,
+                 norm_eval=True,
+                 frozen_stages=-1,
                  style='pytorch',
-                 zero_init_residual=True):
+                 zero_init_residual=False):
         super(EfficientNet, self).__init__()
         assert cls_name in self.arch_types, 'Wrong efficientnet configuration'
         assert len(self.arch_settings.keys()) == num_stages
@@ -292,10 +296,13 @@ class EfficientNet(nn.Module):
         self.num_classes = num_classes
         self.image_size = image_size
         self.out_indices = out_indices
+        self.norm_eval = norm_eval
+        self.frozen_stages = frozen_stages
         self.style = style
         self.zero_init_residual = zero_init_residual
 
         bn_momentum = 1 - self.bn_momentum
+        # bn_momentum = self.bn_momentum
 
         Conv2d = get_same_padding_conv2d(self.image_size)
         outplanes = self.round_filters(self.arch_settings['stage-1'].inplanes)
@@ -344,9 +351,25 @@ class EfficientNet(nn.Module):
 
                 block_num += 1
 
-        self._stage_indices = [self._stage_indices[x]
-                               for x in self.out_indices]
+        self._out_indices = [self._stage_indices[x]
+                             for x in self.out_indices]
         self._swish = Swish()
+        # self._freeze_stages()
+
+    def _freeze_stages(self):
+        if self.frozen_stages >= 0:
+            self._bn0.eval()
+            for m in [self._conv_stem, self._bn0]:
+                for param in m.parameters():
+                    param.requires_grad = False
+
+        frozen_blocks = self._stage_indices[self.frozen_stages - 1] + 1
+        for i in range(frozen_blocks):
+            m = self._blocks[i]
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
+            # print('Freezing block ', i + 1, flush=True)
 
     def init_weights(self, pretrained=None):
         if isinstance(pretrained, str):
@@ -356,15 +379,13 @@ class EfficientNet(nn.Module):
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
                     kaiming_init(m)
-                # elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                #     constant_init(m, 1)
+                elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                    constant_init(m, 1)
 
             if self.zero_init_residual:
                 for m in self.modules():
                     if isinstance(m, MBConvBlock):
-                        constant_init(m.norm3, 0)
-                    elif isinstance(m, MBConvBlock):
-                        constant_init(m.norm2, 0)
+                        constant_init(m._bn2, 0)
         else:
             raise TypeError('pretrained must be a str or None')
 
@@ -403,7 +424,16 @@ class EfficientNet(nn.Module):
         outs = []
         for i, block in enumerate(self._blocks):
             x = block(x, self.drop_connect_rate)
-            if i in self._stage_indices:
+            if i in self._out_indices:
                 outs.append(x)
-
         return tuple(outs)
+
+    # def train(self, mode=True):
+    #     super(EfficientNet, self).train(mode)
+
+        # self._freeze_stages()
+        # if mode and self.norm_eval:
+        #     for m in self.modules():
+        #         # trick: eval have effect on BatchNorm only
+        #         if isinstance(m, _BatchNorm):
+        #             m.eval()
