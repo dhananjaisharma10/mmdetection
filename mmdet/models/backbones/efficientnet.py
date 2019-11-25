@@ -371,6 +371,8 @@ class EfficientNet(nn.Module):
                 param.requires_grad = False
             # print('Freezing block ', i + 1, flush=True)
 
+    # TODO: Implement the function for freezing stages
+
     def init_weights(self, pretrained=None):
         if isinstance(pretrained, str):
             logger = logging.getLogger()

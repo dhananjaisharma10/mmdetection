@@ -537,6 +537,6 @@ class ResNet(nn.Module):
         self._freeze_stages()
         if mode and self.norm_eval:
             for m in self.modules():
-                # trick: eval have effect on BatchNorm only
+                # trick: eval has effect on BatchNorm only
                 if isinstance(m, _BatchNorm):
                     m.eval()
