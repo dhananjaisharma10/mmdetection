@@ -1,6 +1,11 @@
 from __future__ import division
 import argparse
 import os
+import sys
+
+ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
+if ros_path in sys.path:
+    sys.path.remove(ros_path)
 
 import torch
 from mmcv import Config
@@ -11,6 +16,7 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 from mmdet.utils import flops_counter
+from datetime import datetime
 
 
 def parse_args():
@@ -57,6 +63,11 @@ def main():
     # update configs according to CLI args
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
+    # create "run_id" directory to save models
+    dt = datetime.now()
+    run_id = dt.strftime('%m_%d_%H_%M')  # store models for a run
+    cfg.work_dir = os.path.join(cfg.work_dir, run_id)
+
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
     cfg.gpus = args.gpus
