@@ -3,12 +3,9 @@ model = dict(
     type='MaskRCNN',
     pretrained='http://storage.googleapis.com/public-models/efficientnet/efficientnet-b0-355c32eb.pth',
     backbone=dict(
-        type='EfficientNet',
-        cls_name='efficientnet-b0',
+        type='EfficientNetDet',
+        model_name='efficientnet-b0',
         num_classes=9,
-        num_stages=7,
-        image_size=None,
-        out_indices=(2, 3, 4, 5, 6),
         style='pytorch'),
     neck=dict(
         type='FPN',
@@ -124,7 +121,8 @@ train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
     dict(
-        type='Resize', img_scale=[(2048, 800), (2048, 1024)], keep_ratio=True),
+        # NOTE: Removed one of the scales: (2048, 800)
+        type='Resize', img_scale=[(2048, 1024)], keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
@@ -178,7 +176,7 @@ optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
-    policy='step',
+    policy='cosine',  # 'step',
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,

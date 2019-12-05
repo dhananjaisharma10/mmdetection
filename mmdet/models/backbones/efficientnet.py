@@ -302,7 +302,6 @@ class EfficientNet(nn.Module):
         self.zero_init_residual = zero_init_residual
 
         bn_momentum = 1 - self.bn_momentum
-        # bn_momentum = self.bn_momentum
 
         Conv2d = get_same_padding_conv2d(self.image_size)
         outplanes = self.round_filters(self.arch_settings['stage-1'].inplanes)
@@ -350,7 +349,6 @@ class EfficientNet(nn.Module):
                     self._stage_indices.append(block_num)
 
                 block_num += 1
-
         self._out_indices = [self._stage_indices[x]
                              for x in self.out_indices]
         self._swish = Swish()
@@ -370,8 +368,6 @@ class EfficientNet(nn.Module):
             for param in m.parameters():
                 param.requires_grad = False
             # print('Freezing block ', i + 1, flush=True)
-
-    # TODO: Implement the function for freezing stages
 
     def init_weights(self, pretrained=None):
         if isinstance(pretrained, str):
@@ -423,7 +419,7 @@ class EfficientNet(nn.Module):
         x = self._conv_stem(x)
         x = self._bn0(x)
         x = self._swish(x)
-        outs = []
+        outs = list()
         for i, block in enumerate(self._blocks):
             x = block(x, self.drop_connect_rate)
             if i in self._out_indices:

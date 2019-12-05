@@ -112,11 +112,9 @@ class FPN(nn.Module):
         used_backbone_levels = len(laterals)
         for i in range(used_backbone_levels - 1, 0, -1):
             # check if same resolution (e.g. EfficientNet)
-            if laterals[i - 1].size()[-2:] == laterals[i].size()[-2:]:
-                laterals[i - 1] += laterals[i]
-            else:
-                laterals[i - 1] += F.interpolate(
-                    laterals[i], scale_factor=2, mode='nearest')
+            scale = int(laterals[i - 1].size(3) / laterals[i].size(3))
+            laterals[i - 1] += F.interpolate(
+                laterals[i], scale_factor=scale, mode='nearest')
 
         # build outputs
         # part 1: from original levels
