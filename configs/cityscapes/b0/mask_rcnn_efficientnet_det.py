@@ -6,6 +6,7 @@ model = dict(
         type='EfficientNetDet',
         model_name='efficientnet-b0',
         num_classes=9,
+        frozen_stages=2,
         style='pytorch'),
     neck=dict(
         type='FPN',
