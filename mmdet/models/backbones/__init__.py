@@ -4,6 +4,7 @@ from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
 from .efficientnet import EfficientNet
 from .efficientnet_det import EfficientNetDet
+from .mobilenetv3 import MobileNetV3
 
 __all__ = ['ResNet', 'make_res_layer', 'ResNeXt', 'SSDVGG', 'HRNet',
-           'EfficientNet', 'EfficientNetDet']
+           'EfficientNet', 'EfficientNetDet', 'MobileNetV3']
