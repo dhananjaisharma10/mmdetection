@@ -73,9 +73,7 @@ class MBConvBlock(nn.Module):
         self.id_skip = block_args.id_skip  # skip connection and drop connect
 
         # Get static or dynamic convolution depending on image size
-        Conv2d = Conv2dDynamicSamePadding
-        # Conv2d = get_same_padding_conv2d(image_size=None)
-        # Conv2d = get_same_padding_conv2d(image_size=global_params.image_size)
+        Conv2d = get_same_padding_conv2d(image_size=None)
 
         # Expansion phase
         inp = self._block_args.input_filters  # number of input channels
@@ -149,8 +147,11 @@ class EfficientNetDet(nn.Module):
         model = EfficientNet.from_pretrained('efficientnet-b0')
     """
 
-    def __init__(self, model_name, num_classes, style='pytorch'):
-    # def __init__(self, model_name, num_classes, blocks_args=None, global_params=None):
+    def __init__(self,
+                 model_name,
+                 num_classes,
+                 frozen_stages=-1,
+                 style='pytorch'):
         super().__init__()
         assert isinstance(num_classes, int)
         assert isinstance(model_name, str)
@@ -162,12 +163,11 @@ class EfficientNetDet(nn.Module):
         assert len(blocks_args) > 0, 'block args must be greater than 0'
         self._global_params = global_params
         self._blocks_args = blocks_args
+        self.frozen_stages = frozen_stages
         self.style = style
 
         # Get static or dynamic convolution depending on image size
-        Conv2d = Conv2dDynamicSamePadding
-        # Conv2d = get_same_padding_conv2d(image_size=None)
-        # Conv2d = get_same_padding_conv2d(image_size=global_params.image_size)
+        Conv2d = get_same_padding_conv2d(image_size=None)
 
         # Batch norm parameters
         bn_mom = 1 - self._global_params.batch_norm_momentum
@@ -220,7 +220,7 @@ class EfficientNetDet(nn.Module):
 
     def extract_features(self, inputs):
         """ Returns output of the final convolution layer """
-        P = []
+        P = list()
         # Stem
         x = self._swish(self._bn0(self._conv_stem(inputs)))
 
@@ -264,6 +264,20 @@ class EfficientNetDet(nn.Module):
         #         idx += 1
         #     P.append(x)
         # return P
+
+    def _freeze_stages(self):
+        if self.frozen_stages >= 0:
+            self._bn0.eval()
+            for m in [self._conv_stem, self._bn0]:
+                for param in m.parameters():
+                    param.requires_grad = False
+
+        frozen_blocks = self._out_indices[self.frozen_stages - 1] + 1
+        for i in range(frozen_blocks):
+            m = self._blocks[i]
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
 
     def forward(self, inputs):
         """ Calls extract_features to extract features, applies final linear
