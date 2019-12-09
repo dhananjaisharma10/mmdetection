@@ -96,7 +96,8 @@ def main():
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     print('Number of trainable params:',
           flops_counter.get_model_parameters_number(model))
-
+    print(flops_counter.print_model_with_flops(model))
+    exit()
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
         datasets.append(build_dataset(cfg.data.val))
