@@ -9,6 +9,8 @@ arXiv preprint arXiv:1905.02244.
 
 import torch.nn as nn
 from ..registry import BACKBONES
+from mmcv.cnn import constant_init, kaiming_init
+from torch.nn.modules.batchnorm import _BatchNorm
 import logging
 from mmcv.runner import load_checkpoint
 
@@ -236,5 +238,11 @@ class MobileNetV3(nn.Module):
         if isinstance(pretrained, str):
             logger = logging.getLogger()
             load_checkpoint(self, pretrained, strict=False, logger=logger)
+        elif pretrained is None:
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    kaiming_init(m)
+                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
+                    constant_init(m, 1)
         else:
             raise TypeError('pretrained must be a str or None')
